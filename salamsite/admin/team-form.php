@@ -1,283 +1,113 @@
 <?php
-session_start();
-require_once '../config.php';
-require_once '../database.php';
+require_once __DIR__ . '/../includes/admin-check.php';
 
-// Check admin login
-if (!isset($_SESSION['admin_id'])) {
-    header('Location: login.php');
-    exit();
+$id = (int)($_GET['id'] ?? 0);
+$member = ['name'=>'','position'=>'','email'=>'','phone'=>'','image_path'=>'','order_by'=>0];
+
+if ($id) {
+    $s = $pdo->prepare("SELECT * FROM team WHERE id=?");
+    $s->execute([$id]);
+    $found = $s->fetch();
+    if ($found) $member = $found;
+    $admin_title = 'تعديل عضو الفريق';
+} else {
+    $admin_title = 'إضافة عضو جديد';
 }
+$admin_icon = 'user-plus';
 
-$isEdit = false;
-$member = [
-    'name' => '',
-    'position' => '',
-    'email' => '',
-    'phone' => '',
-    'bio' => '',
-    'image_path' => ''
-];
-
-// Check if editing existing team member
-if (isset($_GET['id']) && is_numeric($_GET['id'])) {
-    $isEdit = true;
-    $stmt = $pdo->prepare('SELECT * FROM team WHERE id = ?');
-    $stmt->execute([$_GET['id']]);
-    $member = $stmt->fetch(PDO::FETCH_ASSOC);
-    
-    if (!$member) {
-        header('Location: team.php');
-        exit();
-    }
-}
-
-// Handle form submission
+$success = $error = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $name = trim($_POST['name']);
-    $position = trim($_POST['position']);
-    $email = trim($_POST['email']);
-    $phone = trim($_POST['phone']);
-    $bio = trim($_POST['bio']);
-    
-    // Handle image upload
-    $imagePath = $member['image_path'];
-    if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
-        $uploadDir = '../' . UPLOAD_DIR . 'team/';
-        if (!is_dir($uploadDir)) {
-            mkdir($uploadDir, 0755, true);
+    $name  = trim($_POST['name'] ?? '');
+    $pos   = trim($_POST['position'] ?? '');
+    $email = trim($_POST['email'] ?? '');
+    $phone = trim($_POST['phone'] ?? '');
+    $order = (int)($_POST['order_by'] ?? 0);
+
+    if (empty($name)) { $error = 'اسم العضو مطلوب'; }
+    else {
+        $image_path = $member['image_path'];
+        if (!empty($_FILES['image']['name'])) {
+            $ext = strtolower(pathinfo($_FILES['image']['name'], PATHINFO_EXTENSION));
+            if (in_array($ext, ['jpg','jpeg','png','webp','gif'])) {
+                $fname = 'team_' . time() . '.' . $ext;
+                if (move_uploaded_file($_FILES['image']['tmp_name'], __DIR__ . '/../uploads/team/' . $fname)) {
+                    if ($image_path && file_exists(__DIR__ . '/../' . $image_path)) unlink(__DIR__ . '/../' . $image_path);
+                    $image_path = 'uploads/team/' . $fname;
+                }
+            }
         }
-        
-        $fileName = uniqid() . '_' . basename($_FILES['image']['name']);
-        $filePath = $uploadDir . $fileName;
-        
-        if (move_uploaded_file($_FILES['image']['tmp_name'], $filePath)) {
-            $imagePath = UPLOAD_DIR . 'team/' . $fileName;
+
+        if ($id) {
+            $pdo->prepare("UPDATE team SET name=?,position=?,email=?,phone=?,image_path=?,order_by=? WHERE id=?")
+                ->execute([$name,$pos,$email,$phone,$image_path,$order,$id]);
+            $success = 'تم تحديث بيانات العضو بنجاح';
+        } else {
+            $pdo->prepare("INSERT INTO team (name,position,email,phone,image_path,order_by) VALUES (?,?,?,?,?,?)")
+                ->execute([$name,$pos,$email,$phone,$image_path,$order]);
+            $id = $pdo->lastInsertId();
+            $success = 'تم إضافة العضو بنجاح';
         }
+        $s = $pdo->prepare("SELECT * FROM team WHERE id=?"); $s->execute([$id]); $member = $s->fetch();
     }
-    
-    if ($isEdit) {
-        // Update existing member
-        $stmt = $pdo->prepare('UPDATE team SET name = ?, position = ?, email = ?, phone = ?, bio = ?, image_path = ? WHERE id = ?');
-        $stmt->execute([$name, $position, $email, $phone, $bio, $imagePath, $_GET['id']]);
-        $success = 'تم تحديث بيانات العضو بنجاح';
-    } else {
-        // Insert new member
-        $stmt = $pdo->prepare('INSERT INTO team (name, position, email, phone, bio, image_path) VALUES (?, ?, ?, ?, ?, ?)');
-        $stmt->execute([$name, $position, $email, $phone, $bio, $imagePath]);
-        $success = 'تم إضافة العضو بنجاح';
-        $isEdit = true;
-        $_GET['id'] = $pdo->lastInsertId();
-    }
-    
-    // Refresh member data
-    $stmt = $pdo->prepare('SELECT * FROM team WHERE id = ?');
-    $stmt->execute([$_GET['id']]);
-    $member = $stmt->fetch(PDO::FETCH_ASSOC);
 }
+
+include __DIR__ . '/../includes/admin-header.php';
 ?>
-<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-    <meta charset="UTF-8">
-    <title><?php echo $isEdit ? 'تعديل' : 'إضافة'; ?> عضو فريق - لوحة التحكم</title>
-    <link rel="stylesheet" href="../assets/css/style.css">
-    <style>
-        .form-container {
-            max-width: 800px;
-            margin: 2rem auto;
-            padding: 2rem;
-            background: white;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }
-        
-        .form-group {
-            margin-bottom: 1.5rem;
-        }
-        
-        .form-group label {
-            display: block;
-            margin-bottom: 0.5rem;
-            font-weight: bold;
-            color: #333;
-        }
-        
-        .form-group input,
-        .form-group textarea {
-            width: 100%;
-            padding: 0.75rem;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            font-size: 1rem;
-            font-family: inherit;
-        }
-        
-        .form-group input:focus,
-        .form-group textarea:focus {
-            outline: none;
-            border-color: #3498db;
-        }
-        
-        .form-group textarea {
-            min-height: 120px;
-            resize: vertical;
-        }
-        
-        .image-upload-area {
-            border: 2px dashed #ddd;
-            padding: 2rem;
-            text-align: center;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: border-color 0.3s;
-        }
-        
-        .image-upload-area:hover {
-            border-color: #3498db;
-        }
-        
-        .current-image {
-            margin-top: 1rem;
-        }
-        
-        .current-image img {
-            max-width: 200px;
-            border-radius: 8px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-        }
-        
-        .btn {
-            padding: 0.75rem 1.5rem;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 1rem;
-            text-decoration: none;
-            display: inline-block;
-            transition: background-color 0.3s;
-        }
-        
-        .btn-primary {
-            background-color: #3498db;
-            color: white;
-        }
-        
-        .btn-primary:hover {
-            background-color: #2980b9;
-        }
-        
-        .btn-secondary {
-            background-color: #95a5a6;
-            color: white;
-        }
-        
-        .btn-secondary:hover {
-            background-color: #7f8c8d;
-        }
-        
-        .success-message {
-            background-color: #d4edda;
-            color: #155724;
-            padding: 1rem;
-            border-radius: 4px;
-            margin-bottom: 1rem;
-        }
-        
-        .form-actions {
-            display: flex;
-            gap: 1rem;
-            margin-top: 2rem;
-        }
-    </style>
-</head>
-<body>
-    <div class="dashboard-header">
-        <h1>شركة السلام للعقارات</h1>
-        <nav class="dashboard-nav">
-            <ul>
-                <li><a href="dashboard.php">لوحة التحكم</a></li>
-                <li><a href="projects.php">إدارة المشاريع</a></li>
-                <li><a href="services.php">إدارة الخدمات</a></li>
-                <li><a href="team.php" style="background-color: #34495e;">إدارة الفريق</a></li>
-                <li><a href="about.php">إدارة المحتوى</a></li>
-                <li><a href="contact.php">إدارة الرسائل</a></li>
-                <li><a href="settings.php">الإعدادات</a></li>
-                <li><a href="logout.php">تسجيل الخروج</a></li>
-            </ul>
-        </nav>
+
+<?php if ($success): ?><div class="alert alert-success"><i class="fas fa-check-circle"></i> <?php echo $success; ?> <a href="/admin/team.php" style="margin-right:10px;color:var(--gold);">العودة للقائمة</a></div><?php endif; ?>
+<?php if ($error): ?><div class="alert alert-error"><i class="fas fa-exclamation-circle"></i> <?php echo $error; ?></div><?php endif; ?>
+
+<div class="admin-card">
+    <div class="admin-card-header">
+        <h3><i class="fas fa-user-plus"></i> <?php echo $admin_title; ?></h3>
+        <a href="/admin/team.php" class="btn btn-sm btn-dark"><i class="fas fa-arrow-right"></i> العودة</a>
     </div>
-    
-    <div class="form-container">
-        <h2><?php echo $isEdit ? 'تعديل بيانات' : 'إضافة'; ?> عضو فريق</h2>
-        
-        <?php if (isset($success)): ?>
-            <div class="success-message"><?php echo htmlspecialchars($success); ?></div>
-        <?php endif; ?>
-        
-        <form method="POST" action="" enctype="multipart/form-data">
-            <div class="form-group">
-                <label for="name">الاسم الكامل *</label>
-                <input type="text" id="name" name="name" value="<?php echo htmlspecialchars($member['name']); ?>" required>
-            </div>
-            
-            <div class="form-group">
-                <label for="position">المنصب الوظيفي *</label>
-                <input type="text" id="position" name="position" value="<?php echo htmlspecialchars($member['position']); ?>" required>
-            </div>
-            
-            <div class="form-group">
-                <label for="email">البريد الإلكتروني</label>
-                <input type="email" id="email" name="email" value="<?php echo htmlspecialchars($member['email']); ?>">
-            </div>
-            
-            <div class="form-group">
-                <label for="phone">رقم الهاتف</label>
-                <input type="text" id="phone" name="phone" value="<?php echo htmlspecialchars($member['phone']); ?>">
-            </div>
-            
-            <div class="form-group">
-                <label for="bio">نبذة مختصرة عن العضو</label>
-                <textarea id="bio" name="bio"><?php echo htmlspecialchars($member['bio']); ?></textarea>
-            </div>
-            
-            <div class="form-group">
-                <label>صورة العضو</label>
-                <div class="image-upload-area" onclick="document.getElementById('image').click()">
-                    <p>اضغط هنا لرفع صورة العضو</p>
-                    <p style="font-size: 0.875rem; color: #666;">صورة بحجم مناسب (مربعة مثالية)</p>
-                    <input type="file" id="image" name="image" accept="image/*" style="display: none;">
+    <div class="admin-card-body">
+        <form method="POST" enctype="multipart/form-data">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+                <div>
+                    <div class="form-mb">
+                        <label class="form-label">الاسم الكامل *</label>
+                        <input type="text" name="name" class="form-control" value="<?php echo htmlspecialchars($member['name']); ?>" required>
+                    </div>
+                    <div class="form-mb">
+                        <label class="form-label">المنصب / الوظيفة</label>
+                        <input type="text" name="position" class="form-control" value="<?php echo htmlspecialchars($member['position'] ?? ''); ?>" placeholder="مثال: مدير عام، مستشار عقاري...">
+                    </div>
+                    <div class="form-mb">
+                        <label class="form-label">البريد الإلكتروني</label>
+                        <input type="email" name="email" class="form-control" value="<?php echo htmlspecialchars($member['email'] ?? ''); ?>">
+                    </div>
+                    <div class="form-mb">
+                        <label class="form-label">رقم الهاتف</label>
+                        <input type="text" name="phone" class="form-control" value="<?php echo htmlspecialchars($member['phone'] ?? ''); ?>">
+                    </div>
+                    <div class="form-mb">
+                        <label class="form-label">الترتيب</label>
+                        <input type="number" name="order_by" class="form-control" value="<?php echo $member['order_by']; ?>" min="0">
+                    </div>
                 </div>
-                
-                <?php if ($member['image_path']): ?>
-                <div class="current-image">
-                    <p>الصورة الحالية:</p>
-                    <img src="../<?php echo htmlspecialchars($member['image_path']); ?>" alt="صورة العضو">
+                <div>
+                    <label class="form-label">الصورة الشخصية</label>
+                    <?php if (!empty($member['image_path']) && file_exists(__DIR__ . '/../' . $member['image_path'])): ?>
+                    <div class="img-current">
+                        <img src="/<?php echo htmlspecialchars($member['image_path']); ?>" alt="" style="border-radius:50%;width:150px;height:150px;object-fit:cover;margin-bottom:10px;">
+                    </div>
+                    <?php endif; ?>
+                    <div class="upload-area">
+                        <i class="fas fa-user-circle" style="font-size:40px;margin-bottom:8px;"></i>
+                        <span><?php echo !empty($member['image_path']) ? 'رفع صورة جديدة' : 'اضغط لرفع الصورة الشخصية'; ?></span>
+                        <input type="file" name="image" accept="image/*" class="img-upload-input" data-preview="teamPreview" style="display:none;">
+                    </div>
+                    <img id="teamPreview" class="img-preview" style="display:none;border-radius:50%;width:150px;height:150px;object-fit:cover;margin-top:10px;" alt="">
                 </div>
-                <?php endif; ?>
             </div>
-            
-            <div class="form-actions">
-                <button type="submit" class="btn btn-primary"><?php echo $isEdit ? 'تحديث' : 'إضافة'; ?> العضو</button>
-                <a href="team.php" class="btn btn-secondary">إلغاء</a>
+            <div style="display:flex;gap:10px;padding-top:15px;border-top:1px solid #eee;margin-top:5px;">
+                <button type="submit" class="btn btn-gold"><i class="fas fa-save"></i> <?php echo $id ? 'تحديث البيانات' : 'إضافة العضو'; ?></button>
+                <a href="/admin/team.php" class="btn btn-dark">إلغاء</a>
             </div>
         </form>
     </div>
-    
-    <script>
-        document.getElementById('image').addEventListener('change', function(e) {
-            const file = e.target.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    const preview = document.querySelector('.current-image') || document.createElement('div');
-                    preview.className = 'current-image';
-                    preview.innerHTML = '<p>الصورة المختارة:</p><img src="' + e.target.result + '" alt="صورة العضو">';
-                    document.querySelector('.form-container').appendChild(preview);
-                };
-                reader.readAsDataURL(file);
-            }
-        });
-    </script>
-</body>
-</html>
+</div>
+
+<?php include __DIR__ . '/../includes/admin-footer.php'; ?>

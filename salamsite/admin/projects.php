@@ -1,231 +1,56 @@
 <?php
-session_start();
-require_once '../config.php';
-require_once '../database.php';
+$admin_title = 'إدارة المشاريع';
+$admin_icon = 'building';
+require_once __DIR__ . '/../includes/admin-check.php';
 
-// Check admin login
-if (!isset($_SESSION['admin_id'])) {
-    header('Location: login.php');
-    exit();
-}
-
-// Handle delete action
+$success = '';
 if (isset($_GET['delete']) && is_numeric($_GET['delete'])) {
-    $id = (int)$_GET['delete'];
-    $stmt = $pdo->prepare("DELETE FROM projects WHERE id = ?");
-    $stmt->execute([$id]);
+    $pr = $pdo->prepare("SELECT image_path FROM projects WHERE id=?");
+    $pr->execute([(int)$_GET['delete']]);
+    $p = $pr->fetch();
+    if ($p && !empty($p['image_path']) && file_exists(__DIR__ . '/../' . $p['image_path'])) unlink(__DIR__ . '/../' . $p['image_path']);
+    $pdo->prepare("DELETE FROM projects WHERE id=?")->execute([(int)$_GET['delete']]);
     $success = 'تم حذف المشروع بنجاح';
 }
 
-// Fetch all projects
-$stmt = $pdo->query("SELECT * FROM projects ORDER BY added_date DESC");
-$projects = $stmt->fetchAll(PDO::FETCH_ASSOC);
+$projects = $pdo->query("SELECT * FROM projects ORDER BY id DESC")->fetchAll();
+include __DIR__ . '/../includes/admin-header.php';
 ?>
-<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-    <meta charset="UTF-8">
-    <title>إدارة المشاريع - لوحة التحكم</title>
-    <link rel="stylesheet" href="../assets/css/style.css">
-    <style>
-        .admin-container {
-            max-width: 1200px;
-            margin: 2rem auto;
-            padding: 0 1rem;
-        }
-        
-        .page-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 2rem;
-        }
-        
-        .btn {
-            padding: 0.75rem 1.5rem;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 1rem;
-            text-decoration: none;
-            display: inline-block;
-            transition: background-color 0.3s;
-        }
-        
-        .btn-primary {
-            background-color: #3498db;
-            color: white;
-        }
-        
-        .btn-primary:hover {
-            background-color: #2980b9;
-        }
-        
-        .btn-danger {
-            background-color: #e74c3c;
-            color: white;
-        }
-        
-        .btn-danger:hover {
-            background-color: #c0392b;
-        }
-        
-        .btn-edit {
-            background-color: #f39c12;
-            color: white;
-        }
-        
-        .btn-edit:hover {
-            background-color: #d68910;
-        }
-        
-        .projects-table {
-            width: 100%;
-            background: white;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            overflow: hidden;
-        }
-        
-        .projects-table th,
-        .projects-table td {
-            padding: 1rem;
-            text-align: right;
-            border-bottom: 1px solid #eee;
-        }
-        
-        .projects-table th {
-            background-color: #2c3e50;
-            color: white;
-            font-weight: bold;
-        }
-        
-        .projects-table tr:hover {
-            background-color: #f8f9fa;
-        }
-        
-        .status-badge {
-            padding: 0.25rem 0.75rem;
-            border-radius: 12px;
-            font-size: 0.875rem;
-            font-weight: bold;
-        }
-        
-        .status-pending {
-            background-color: #fff3cd;
-            color: #856404;
-        }
-        
-        .status-completed {
-            background-color: #d4edda;
-            color: #155724;
-        }
-        
-        .actions {
-            display: flex;
-            gap: 0.5rem;
-        }
-        
-        .success-message {
-            background-color: #d4edda;
-            color: #155724;
-            padding: 1rem;
-            border-radius: 4px;
-            margin-bottom: 1rem;
-        }
-        
-        .empty-state {
-            text-align: center;
-            padding: 3rem;
-            color: #666;
-        }
-        
-        @media (max-width: 768px) {
-            .projects-table {
-                display: block;
-                overflow-x: auto;
-            }
-            
-            .page-header {
-                flex-direction: column;
-                gap: 1rem;
-                align-items: stretch;
-            }
-        }
-    </style>
-</head>
-<body>
-    <div class="dashboard-header">
-        <h1>شركة السلام للعقارات</h1>
-        <nav class="dashboard-nav">
-            <ul>
-                <li><a href="dashboard.php">لوحة التحكم</a></li>
-                <li><a href="projects.php" style="background-color: #34495e;">إدارة المشاريع</a></li>
-                <li><a href="services.php">إدارة الخدمات</a></li>
-                <li><a href="team.php">إدارة الفريق</a></li>
-                <li><a href="about.php">إدارة المحتوى</a></li>
-                <li><a href="contact.php">إدارة الرسائل</a></li>
-                <li><a href="settings.php">الإعدادات</a></li>
-                <li><a href="logout.php">تسجيل الخروج</a></li>
-            </ul>
-        </nav>
-    </div>
-    
-    <div class="admin-container">
-        <div class="page-header">
-            <h2>إدارة المشاريع</h2>
-            <a href="project-form.php" class="btn btn-primary">إضافة مشروع جديد</a>
-        </div>
-        
-        <?php if (isset($success)): ?>
-            <div class="success-message"><?php echo htmlspecialchars($success); ?></div>
-        <?php endif; ?>
-        
-        <?php if (count($projects) > 0): ?>
-            <table class="projects-table">
-                <thead>
-                    <tr>
-                        <th>#</th>
-                        <th>اسم المشروع</th>
-                        <th>الموقع</th>
-                        <th>الحالة</th>
-                        <th>السعر</th>
-                        <th>تاريخ الإضافة</th>
-                        <th>الإجراءات</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach ($projects as $index => $project): ?>
-                        <tr>
-                            <td><?php echo $index + 1; ?></td>
-                            <td><?php echo htmlspecialchars($project['name']); ?></td>
-                            <td><?php echo htmlspecialchars($project['location']); ?></td>
-                            <td>
-                                <span class="status-badge status-<?php echo strtolower($project['status']); ?>">
-                                    <?php echo $project['status'] == 'Pending' ? 'قيد التنفيذ' : 'مكتمل'; ?>
-                                </span>
-                            </td>
-                            <td>
-                                <?php echo $project['price'] ? number_format($project['price'], 2) . ' ريال' : 'غير محدد'; ?>
-                            </td>
-                            <td><?php echo date('Y-m-d', strtotime($project['added_date'])); ?></td>
-                            <td class="actions">
-                                <a href="project-form.php?id=<?php echo $project['id']; ?>" class="btn btn-edit">تعديل</a>
-                                <a href="projects.php?delete=<?php echo $project['id']; ?>" class="btn btn-danger" onclick="return confirm('هل أنت متأكد من حذف هذا المشروع؟')">حذف</a>
-                            </td>
-                        </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
+<?php if ($success): ?><div class="alert alert-success"><i class="fas fa-check-circle"></i> <?php echo $success; ?></div><?php endif; ?>
+
+<div class="page-actions">
+    <h3 style="font-size:16px;font-weight:700;color:var(--dark);"><?php echo count($projects); ?> مشروع</h3>
+    <a href="/admin/project-form.php" class="btn btn-gold"><i class="fas fa-plus"></i> إضافة مشروع جديد</a>
+</div>
+
+<div class="admin-card">
+    <div class="admin-card-body" style="padding:0;">
+        <?php if (empty($projects)): ?>
+        <div class="empty-state"><i class="fas fa-building"></i><p>لا توجد مشاريع. ابدأ بإضافة مشروع جديد.</p></div>
         <?php else: ?>
-            <div class="empty-state">
-                <p>لا توجد مشاريع حالياً. ابدأ بإضافة مشروع جديد.</p>
-            </div>
+        <table class="admin-table">
+            <thead><tr><th>الصورة</th><th>الاسم</th><th>الموقع</th><th>الحالة</th><th>السعر</th><th>مميز</th><th>الإجراءات</th></tr></thead>
+            <tbody>
+            <?php foreach ($projects as $p): ?>
+            <tr>
+                <td><?php if (!empty($p['image_path']) && file_exists(__DIR__.'/../'.$p['image_path'])): ?><img src="/<?php echo htmlspecialchars($p['image_path']); ?>" alt=""><?php else: ?><div style="width:50px;height:40px;background:#eee;border-radius:4px;display:flex;align-items:center;justify-content:center;"><i class="fas fa-building" style="color:#ccc;"></i></div><?php endif; ?></td>
+                <td><strong><?php echo htmlspecialchars($p['name']); ?></strong></td>
+                <td><?php echo htmlspecialchars($p['location'] ?? '-'); ?></td>
+                <td><span class="badge badge-gold"><?php echo htmlspecialchars($p['status']); ?></span></td>
+                <td><?php echo htmlspecialchars($p['price'] ?? '-'); ?></td>
+                <td><?php echo $p['featured'] ? '<span class="badge badge-green">نعم</span>' : '<span class="badge" style="background:#eee;color:#888;">لا</span>'; ?></td>
+                <td>
+                    <div style="display:flex;gap:6px;">
+                        <a href="/admin/project-form.php?id=<?php echo $p['id']; ?>" class="btn btn-sm btn-gold"><i class="fas fa-edit"></i> تعديل</a>
+                        <a href="?delete=<?php echo $p['id']; ?>" class="btn btn-sm btn-red delete-btn"><i class="fas fa-trash"></i></a>
+                    </div>
+                </td>
+            </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
         <?php endif; ?>
     </div>
-    
-    <footer>
-        <p>&copy; 2026 شركة السلام للعقارات. جميع الحقوق محفوظة.</p>
-    </footer>
-</body>
-</html>
+</div>
+
+<?php include __DIR__ . '/../includes/admin-footer.php'; ?>

@@ -1,178 +1,111 @@
 <?php
-// Admin Dashboard Layout
-require_once '../config.php';
-require_once '../database.php';
+$admin_title = 'لوحة التحكم';
+$admin_icon = 'tachometer-alt';
+require_once __DIR__ . '/../includes/admin-check.php';
 
-// Check admin login
-if (!isset($_SESSION['admin_id'])) {
-    header('Location: ../login.php');
-    exit();
-}
+$cnt_projects  = $pdo->query("SELECT COUNT(*) FROM projects")->fetchColumn();
+$cnt_services  = $pdo->query("SELECT COUNT(*) FROM services")->fetchColumn();
+$cnt_team      = $pdo->query("SELECT COUNT(*) FROM team")->fetchColumn();
+$cnt_messages  = $pdo->query("SELECT COUNT(*) FROM contact_messages WHERE status='جديد'")->fetchColumn();
+$cnt_sliders   = $pdo->query("SELECT COUNT(*) FROM slider_images WHERE active=1")->fetchColumn();
 
-// Fetch admin data
-$admin_stmt = $pdo->prepare("SELECT * FROM admin_users WHERE id = ?");
-$admin_stmt->execute([$_SESSION['admin_id']]);
-$admin = $admin_stmt->fetch(PDO::FETCH_ASSOC);
+$recent_msg = $pdo->query("SELECT * FROM contact_messages ORDER BY contact_date DESC LIMIT 5")->fetchAll();
+$recent_projects = $pdo->query("SELECT * FROM projects ORDER BY id DESC LIMIT 5")->fetchAll();
+include __DIR__ . '/../includes/admin-header.php';
 ?>
-<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-    <meta charset="UTF-8">
-    <title>لوحة التحكم - شركة السلام للعقارات</title>
-    <link rel="stylesheet" href="../assets/css/style.css">
-    <style>
-        .dashboard-header {
-            background-color: #2c3e50;
-            color: white;
-            padding: 1rem 0;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-        }
-        
-        .dashboard-header h1 {
-            text-align: center;
-            margin-bottom: 1rem;
-        }
-        
-        .dashboard-nav ul {
-            list-style: none;
-            display: flex;
-            justify-content: center;
-            gap: 2rem;
-        }
-        
-        .dashboard-nav a {
-            color: white;
-            text-decoration: none;
-            padding: 0.5rem 1rem;
-            border-radius: 4px;
-            transition: background-color 0.3s;
-        }
-        
-        .dashboard-nav a:hover {
-            background-color: #34495e;
-        }
-        
-        .dashboard-stats {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 1rem;
-            margin: 2rem 0;
-        }
-        
-        .stat-card {
-            background: white;
-            padding: 1.5rem;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            text-align: center;
-        }
-        
-        .stat-card h3 {
-            color: #2c3e50;
-            margin-bottom: 0.5rem;
-        }
-        
-        .stat-card p {
-            font-size: 1.5rem;
-            font-weight: bold;
-            color: #3498db;
-        }
-        
-        .main-content {
-            background: white;
-            padding: 2rem;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }
-        
-        .chart-container {
-            height: 300px;
-            background: #f8f9fa;
-            border-radius: 8px;
-            margin-top: 1rem;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #6c757d;
-        }
-    </style>
-</head>
-<body>
-    <div class="dashboard-header">
-        <h1>شعار شركة السلام</h1>
-        <nav class="dashboard-nav">
-            <ul>
-                <li><a href="dashboard.php">لوحة التحكم</a></li>
-                <li><a href="projects.php">إدارة المشاريع</a></li>
-                <li><a href="services.php">إدارة الخدمات</a></li>
-                <li><a href="team.php">إدارة الفريق</a></li>
-                <li><a href="about.php">إدارة المحتوى</a></li>
-                <li><a href="contact.php">إدارة الرسائل</a></li>
-                <li><a href="settings.php">الإعدادات</a></li>
-                <li><a href="logout.php">تسجيل الخروج</a></li>
-            </ul>
-        </nav>
+
+<div class="admin-stats-grid">
+    <div class="admin-stat-card">
+        <div class="admin-stat-icon gold"><i class="fas fa-images"></i></div>
+        <div class="admin-stat-info"><strong><?php echo $cnt_sliders; ?></strong><span>عروض الرئيسية</span></div>
     </div>
-    
-    <main>
-        <div class="dashboard-stats">
-            <div class="stat-card">
-                <h3>المشاريع</h3>
-                <p>عدد المشاريع: <?php echo get_project_count(); ?></p>
-            </div>
-            <div class="stat-card">
-                <h3>الخدمات</h3>
-                <p>عدد الخدمات: <?php echo get_service_count(); ?></p>
-            </div>
-            <div class="stat-card">
-                <h3>الفريق</h3>
-                <p>عدد الأعضاء: <?php echo get_team_count(); ?></p>
-            </div>
-            <div class="stat-card">
-                <h3>الرسائل</h3>
-                <p>الرسائل الجديدة: <?php echo get_new_message_count(); ?></p>
-            </div>
+    <div class="admin-stat-card">
+        <div class="admin-stat-icon blue"><i class="fas fa-building"></i></div>
+        <div class="admin-stat-info"><strong><?php echo $cnt_projects; ?></strong><span>المشاريع</span></div>
+    </div>
+    <div class="admin-stat-card">
+        <div class="admin-stat-icon green"><i class="fas fa-concierge-bell"></i></div>
+        <div class="admin-stat-info"><strong><?php echo $cnt_services; ?></strong><span>الخدمات</span></div>
+    </div>
+    <div class="admin-stat-card">
+        <div class="admin-stat-icon purple"><i class="fas fa-users"></i></div>
+        <div class="admin-stat-info"><strong><?php echo $cnt_team; ?></strong><span>أعضاء الفريق</span></div>
+    </div>
+    <div class="admin-stat-card">
+        <div class="admin-stat-icon red"><i class="fas fa-envelope"></i></div>
+        <div class="admin-stat-info"><strong><?php echo $cnt_messages; ?></strong><span>رسائل جديدة</span></div>
+    </div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+
+<div class="admin-card">
+    <div class="admin-card-header">
+        <h3><i class="fas fa-envelope"></i> آخر الرسائل</h3>
+        <a href="/admin/messages.php" class="btn btn-sm btn-gold">عرض الكل</a>
+    </div>
+    <div class="admin-card-body" style="padding:0;">
+        <?php if (empty($recent_msg)): ?>
+        <div class="empty-state"><i class="fas fa-inbox"></i><p>لا توجد رسائل</p></div>
+        <?php else: ?>
+        <table class="admin-table">
+            <thead><tr><th>الاسم</th><th>الموضوع</th><th>التاريخ</th><th>الحالة</th></tr></thead>
+            <tbody>
+            <?php foreach ($recent_msg as $m): ?>
+            <tr>
+                <td><?php echo htmlspecialchars($m['name']); ?></td>
+                <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><?php echo htmlspecialchars($m['subject'] ?? '-'); ?></td>
+                <td style="font-size:12px;"><?php echo substr($m['contact_date'],0,10); ?></td>
+                <td><span class="badge <?php echo $m['status']=='جديد'?'badge-red':'badge-green'; ?>"><?php echo htmlspecialchars($m['status']); ?></span></td>
+            </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
+        <?php endif; ?>
+    </div>
+</div>
+
+<div class="admin-card">
+    <div class="admin-card-header">
+        <h3><i class="fas fa-building"></i> آخر المشاريع</h3>
+        <a href="/admin/projects.php" class="btn btn-sm btn-gold">عرض الكل</a>
+    </div>
+    <div class="admin-card-body" style="padding:0;">
+        <?php if (empty($recent_projects)): ?>
+        <div class="empty-state"><i class="fas fa-building"></i><p>لا توجد مشاريع</p></div>
+        <?php else: ?>
+        <table class="admin-table">
+            <thead><tr><th>الصورة</th><th>الاسم</th><th>الموقع</th><th>الحالة</th></tr></thead>
+            <tbody>
+            <?php foreach ($recent_projects as $p): ?>
+            <tr>
+                <td><?php if (!empty($p['image_path']) && file_exists(__DIR__ . '/../' . $p['image_path'])): ?><img src="/<?php echo htmlspecialchars($p['image_path']); ?>" alt=""><?php else: ?><div style="width:50px;height:40px;background:#eee;border-radius:4px;display:flex;align-items:center;justify-content:center;"><i class="fas fa-building" style="color:#ccc;"></i></div><?php endif; ?></td>
+                <td><?php echo htmlspecialchars($p['name']); ?></td>
+                <td><?php echo htmlspecialchars($p['location'] ?? '-'); ?></td>
+                <td><span class="badge badge-gold"><?php echo htmlspecialchars($p['status']); ?></span></td>
+            </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
+        <?php endif; ?>
+    </div>
+</div>
+
+</div>
+
+<div class="admin-card" style="margin-top:20px;">
+    <div class="admin-card-header">
+        <h3><i class="fas fa-rocket"></i> إجراءات سريعة</h3>
+    </div>
+    <div class="admin-card-body">
+        <div style="display:flex;gap:12px;flex-wrap:wrap;">
+            <a href="/admin/slider.php?action=add" class="btn btn-gold"><i class="fas fa-plus"></i> إضافة عرض جديد</a>
+            <a href="/admin/project-form.php" class="btn btn-dark"><i class="fas fa-plus"></i> إضافة مشروع</a>
+            <a href="/admin/service-form.php" class="btn btn-blue"><i class="fas fa-plus"></i> إضافة خدمة</a>
+            <a href="/admin/team-form.php" class="btn btn-green"><i class="fas fa-plus"></i> إضافة عضو فريق</a>
+            <a href="/admin/messages.php" class="btn btn-red"><i class="fas fa-envelope"></i> رسائل التواصل</a>
         </div>
-        
-        <div class="main-content">
-            <h3>إحصائيات الموقع</h3>
-            <p>عدد الزوار: <span id="visitor-count">جاري التحديث...</span></p>
-            <div class="chart-container">
-                سيتم تم تحميل المخطط بعداً</div>
-        </div>
-    </main>
-    
-    <footer>
-        <p>© 2026 شركة السلام للعقارات. جميع الحقوق محفوظة.</p>
-    </footer>
-    
-    <script src="../assets/js/main.js"></script>
-    <script>
-        // Example: Update visitor count
-        document.getElementById('visitor-count').textContent = '1,234';
-    </script>
-</body>
-</html>
+    </div>
+</div>
 
-<?php
-// Helper functions
-function get_project_count() {
-    global $pdo;
-    return $pdo->query("SELECT COUNT(*) FROM projects")->fetchColumn();
-}
-
-function get_service_count() {
-    global $pdo;
-    return $pdo->query("SELECT COUNT(*) FROM services")->fetchColumn();
-}
-
-function get_team_count() {
-    global $pdo;
-    return $pdo->query("SELECT COUNT(*) FROM team")->fetchColumn();
-}
-
-function get_new_message_count() {
-    global $pdo;
-    return $pdo->query("SELECT COUNT(*) FROM contact_messages WHERE status = 'New'")->fetchColumn();
-}
-?>>
+<?php include __DIR__ . '/../includes/admin-footer.php'; ?>
